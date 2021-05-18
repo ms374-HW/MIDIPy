@@ -4,7 +4,7 @@ import sys
 import os
 
 
-def MIDIEvent():
+class MIDIEvent:
     class Type(Enum):
         noteOFF = 0
         noteON = 1
@@ -14,14 +14,14 @@ def MIDIEvent():
     # nVelocity = 0
     # nDeltaTick = 0
 
-    def __init__(self, note):
-        self.type = note
-
-    def __init__(self, note, noteID, vel, delta):
-        self.type = note
-        self.key = noteID
-        self.velocity = vel
-        self.deltaTick = delta
+    def __init__(self, note, noteID=None, vel=None, delta=None):
+        if delta == None:
+            self.type = note
+        else:
+            self.type = note
+            self.key = noteID
+            self.velocity = vel
+            self.deltaTick = delta
 
 
 def MIDINote():
@@ -54,15 +54,16 @@ class MIDITrack:
 
 
 class MIDIFile:
-    class EventName(Enum):
-        VoiceNoteOff = 0x80
-        VoiceNoteOn = 0x90
-        VoiceAftertouch = 0xA0
-        VoiceControlChange = 0xB0
-        VoiceProgramChange = 0xC0
-        VoiceChannelPressure = 0xD0
-        VoicePitchBend = 0xE0
-        SystemExclusive = 0xF0
+    EventName = {
+        "VoiceNoteOff": 0x80,
+        "VoiceNoteOn": 0x90,
+        "VoiceAftertouch": 0xA0,
+        "VoiceControlChange": 0xB0,
+        "VoiceProgramChange": 0xC0,
+        "VoiceChannelPressure": 0xD0,
+        "VoicePitchBend": 0xE0,
+        "SystemExclusive": 0xF0,
+    }
 
     class ModeMessages(Enum):
         ALL_SOUND_OFF = 0x78
@@ -74,22 +75,24 @@ class MIDIFile:
         MONO_MODE_ON = 0x7E
         SystemExclusive = 0x7F
 
-    class MetaEventName(Enum):
-        MetaSequence = 0x00
-        MetaText = 0x01
-        MetaCopyright = 0x02
-        MetaTrackName = 0x03
-        MetaInstrumentName = 0x04
-        MetaLyrics = 0x05
-        MetaMarker = 0x06
-        MetaCuePoint = 0x07
-        MetaChannelPrefix = 0x20
-        MetaEndOfTrack = 0x2F
-        MetaSetTempo = 0x51
-        MetaSMPTEOffset = 0x54
-        MetaTimeSignature = 0x58
-        MetaKeySignature = 0x59
-        MetaSequencerSpecific = 0x7F
+    MetaEventName = {
+        "MetaSequence": 0x00,
+        "MetaText": 0x01,
+        "MetaCopyright": 0x02,
+        "MetaTrackName": 0x03,
+        "MetaInstrumentName": 0x04,
+        "MetaLyrics": 0x05,
+        "MetaMarker": 0x06,
+        "MetaCuePoint": 0x07,
+        "MetaChannelPrefix": 0x20,
+        "MetaPort": 0x21,
+        "MetaEndOfTrack": 0x2F,
+        "MetaSetTempo": 0x51,
+        "MetaSMPTEOffset": 0x54,
+        "MetaTimeSignature": 0x58,
+        "MetaKeySignature": 0x59,
+        "MetaSequencerSpecific": 0x7F,
+    }
 
     def __init__(self, filename):
         MIDIFile.parseFile(filename)
@@ -104,23 +107,7 @@ class MIDIFile:
 
         with open(filename, "rb") as f:
             # f = f.read()
-            
-
-            # we have to swap because MIDI is still stored in an older format
-            # swapping a 32-bit integer
-            def swap32(num):
-                n = int.from_bytes(num, "little")
-                return (
-                    ((n >> 24) & 0xFF)
-                    | ((n << 8) & 0xFF0000)
-                    | ((n >> 8) & 0xFF00)
-                    | ((n << 24) & 0xFF000000)
-                )
-
-            # swapping a 16-bit integer
-            def swap16(num):
-                n = int.from_bytes(num, "little")
-                return (n >> 8) | (n << 8)
+            # print(f.read())
 
             # read a string of given size
             readString = lambda n: f.read(n)
@@ -150,21 +137,12 @@ class MIDIFile:
                         nByte = int.from_bytes(num, "little")
                         # add the next 7 bits of the next byte, shifting the first 7 bits to the left
                         nValue = (nValue << 7) | (nByte & 0x7F)
-
                 return nValue
 
-            # print()
-            # print()
-            # print(f.read(4))
-            # n32 = f.read(4)
             fileID = f.read(4)
-            # n32 = f.read(4)
             headerLength = int.from_bytes(f.read(4), "big")
-            # n16 = f.read(2)
             nFormat = int.from_bytes(f.read(2), "big")
-            # n16 = int.from_bytes(f.read(4), "big")
             trackChunks = int.from_bytes(f.read(2), "big")
-            # n16 = f.read(2)
             division = int.from_bytes(f.read(2), "big")
 
             print(fileID)
@@ -174,41 +152,46 @@ class MIDIFile:
             print(division)
 
             for chunk in range(trackChunks):
-                print("-------- NEW TRACK --------")
-                n32 = f.read(4)
-                # trackID = n32.decode('utf-8')
-                # n32 = f.read(4)
+                endTrack = False
+                wallTime = 0
+                previousState = 0
+                temp = 0
+                events = []
+
+                trackID = f.read(4)
                 trackLength = int.from_bytes(f.read(4), "big")
 
-                # print(trackID)
-                print(trackLength)
-
-                endTrack = False
+                print("-------- NEW TRACK --------")
+                print("Track ID: " + str(int.from_bytes(trackID, "big")))
+                print("track length: " + str(trackLength))
 
                 MIDIFile.tracks.append(MIDITrack())
 
-                wallTime = 0
-                previousState = 0
-                events = []
+                # loop till the end of the track
                 while not endTrack:
                     # the time difference between last note and current note is the delta
                     statusTimeDelta = readValue()
-                    print(statusTimeDelta)
+                    # print("time difference: " + str(statusTimeDelta))
+
                     # the data can begin with an ID or instruction, to check which one it is, we check the status
                     num = f.read(1)
                     status = int.from_bytes(num, "big")
-                    
+
                     if status == 0:
                         if int.from_bytes(f.read(1), "big") == 0:
+                            print("break at " + str(int.from_bytes(f.read(1), "big")))
                             break
+                        else:
+                            f.seek(-1, os.SEEK_CUR)
 
                     if status < 0x80:
                         status = previousState
                         # since we read the instruction byte, we need to bring it back on the stream so we can sync the values
                         f.seek(-1, os.SEEK_CUR)
-                        print("running status!")
+                        # print("running status!")
 
-                    if (status & 0xF0) == MIDIFile.EventName.VoiceNoteOff:
+                    if (status & 0xF0) == MIDIFile.EventName["VoiceNoteOff"]:
+                        # print("in voice note on")
                         previousState = status
                         channel = status & 0x0F
                         noteID = f.read(1)
@@ -222,7 +205,7 @@ class MIDIFile:
                                 statusTimeDelta,
                             )
                         )
-                    elif (status & 0xF0) == MIDIFile.EventName.VoiceNoteOn:
+                    elif (status & 0xF0) == MIDIFile.EventName["VoiceNoteOn"]:
                         previousState = status
                         channel = status & 0x0F
                         noteID = f.read(1)
@@ -247,7 +230,7 @@ class MIDIFile:
                                     statusTimeDelta,
                                 )
                             )
-                    elif (status & 0xF0) == MIDIFile.EventName.VoiceControlChange:
+                    elif (status & 0xF0) == MIDIFile.EventName["VoiceControlChange"]:
                         previousState = status
                         channel = status & 0x0F
                         controlID = f.read(1)
@@ -255,67 +238,75 @@ class MIDIFile:
                         # noteVelocity = int.from_bytes(num, "little")
                         events.append(MIDIEvent(MIDIEvent.Type.other))
 
-                    elif (status & 0xF0) == MIDIFile.EventName.VoiceProgramChange:
+                    elif (status & 0xF0) == MIDIFile.EventName["VoiceProgramChange"]:
                         previousState = status
                         channel = status & 0x0F
                         programID = f.read(1)
                         events.append(MIDIEvent(MIDIEvent.Type.other))
 
-                    elif (status & 0xF0) == MIDIFile.EventName.VoiceChannelPressure:
+                    elif (status & 0xF0) == MIDIFile.EventName["VoiceChannelPressure"]:
                         previousState = status
                         channel = status & 0x0F
                         channelPressure = f.read(1)
                         events.append(MIDIEvent(MIDIEvent.Type.other))
 
-                    elif (status & 0xF0) == MIDIFile.EventName.VoicePitchBend:
+                    elif (status & 0xF0) == MIDIFile.EventName["VoicePitchBend"]:
                         previousState = status
                         channel = status & 0x0F
                         LS7B = f.read(1)
                         MS7B = f.read(1)
                         events.append(MIDIEvent(MIDIEvent.Type.other))
 
-                    elif (status & 0xF0) == MIDIFile.EventName.SystemExclusive:
+                    elif (status & 0xF0) == MIDIFile.EventName["SystemExclusive"]:
+                        temp = previousState
                         previousState = 0
 
                         if status == 0xFF:
                             # read meta message
-                            type = f.read(1)
+                            n = f.read(1)
+                            type = int.from_bytes(n, "big")
                             length = readValue()
 
-                            if type == MIDIFile.MetaEventName.MetaSequence:
+                            if type == MIDIFile.MetaEventName["MetaSequence"]:
                                 print("Sequence number: " + f.read(1) + " " + f.read(1))
-                            elif type == MIDIFile.MetaEventName.MetaText:
+                            elif type == MIDIFile.MetaEventName["MetaText"]:
                                 print("Text: " + readString(length))
-                            elif type == MIDIFile.MetaEventName.MetaCopyright:
+                            elif type == MIDIFile.MetaEventName["MetaCopyright"]:
                                 print("Copyright: " + readString(length))
-                            elif type == MIDIFile.MetaEventName.MetaTrackName:
+                            elif type == MIDIFile.MetaEventName["MetaTrackName"]:
                                 MIDIFile.tracks[chunk].setName(readString(length))
-                                print("Name: " + MIDIFile.tracks[chunk].name)
-                            elif type == MIDIFile.MetaEventName.MetaInstrumentName:
+                                print("Name: " + str(MIDIFile.tracks[chunk].name))
+                            elif type == MIDIFile.MetaEventName["MetaInstrumentName"]:
                                 MIDIFile.tracks[chunk].setInstrument(readString(length))
                                 print(
                                     "Instrument: " + MIDIFile.tracks[chunk].instrument
                                 )
-                            elif type == MIDIFile.MetaEventName.MetaLyrics:
+                            elif type == MIDIFile.MetaEventName["MetaLyrics"]:
                                 print("Lyrics: " + readString(length))
-                            elif type == MIDIFile.MetaEventName.MetaMarker:
+                            elif type == MIDIFile.MetaEventName["MetaMarker"]:
                                 print("Marker: " + readString(length))
-                            elif type == MIDIFile.MetaEventName.MetaCuePoint:
+                            elif type == MIDIFile.MetaEventName["MetaCuePoint"]:
                                 print("Cue: " + readString(length))
-                            elif type == MIDIFile.MetaEventName.MetaChannelPrefix:
-                                print("Prefix: " + f.read(1))
-                            elif type == MIDIFile.MetaEventName.MetaEndOfTrack:
+                            elif type == MIDIFile.MetaEventName["MetaChannelPrefix"]:
+                                print("Prefix: " + str(f.read(1)))
+                            elif type == MIDIFile.MetaEventName["MetaEndOfTrack"]:
                                 endTrack = True
-                            elif type == MIDIFile.MetaEventName.MetaSetTempo:
-                                if m_nTempo == 0:
+                            elif type == MIDIFile.MetaEventName["MetaSetTempo"]:
+                                if MIDIFile.m_nTempo == 0:
                                     num = f.read(1)
                                     n = int.from_bytes(num, "little")
-                                    m_nTempo |= n << 16
-                                    m_nTempo |= n << 8
-                                    m_nTempo |= n << 0
-                                    m_nBPM = 60000000 / m_nTempo
-                                    print("Tempo: " + m_nTempo + " (" + m_nBPM + "bpm)")
-                            elif type == MIDIFile.MetaEventName.MetaSMPTEOffset:
+                                    MIDIFile.m_nTempo |= n << 16
+                                    MIDIFile.m_nTempo |= n << 8
+                                    MIDIFile.m_nTempo |= n << 0
+                                    MIDIFile.m_nBPM = 60000000 / MIDIFile.m_nTempo
+                                    print(
+                                        "Tempo: "
+                                        + str(MIDIFile.m_nTempo)
+                                        + " ("
+                                        + str(MIDIFile.m_nBPM)
+                                        + "bpm)"
+                                    )
+                            elif type == MIDIFile.MetaEventName["MetaSMPTEOffset"]:
                                 print(
                                     "SMPTE: H:"
                                     + f.read(1)
@@ -328,25 +319,37 @@ class MIDIFile:
                                     + " FF:"
                                     + f.read(1)
                                 )
-                            elif type == MIDIFile.MetaEventName.MetaTimeSignature:
+                            elif type == MIDIFile.MetaEventName["MetaTimeSignature"]:
                                 n1 = f.read(1)
                                 num = f.read(1)
                                 n2 = int.from_bytes(num, "little")
-                                print("Time Signature: " + n1 + "/" + (2 << n2))
-                            elif type == MIDIFile.MetaEventName.MetaKeySignature:
-                                print("Key Signature: " + f.read(1))
-                                print("Minor Key: " + f.read(1))
-                            elif type == MIDIFile.MetaEventName.MetaSequencerSpecific:
+                                print("Time Signature: " + str(n1) + "/" + str(2 << n2))
+                            elif type == MIDIFile.MetaEventName["MetaKeySignature"]:
+                                print("Key Signature: " + str(f.read(1)))
+                                print("Minor Key: " + str(f.read(1)))
+                            elif type == MIDIFile.MetaEventName["MetaPort"]:
+                                print("Meta Port")
+                                # print("Minor Key: " + str(f.read(1)))
+                            elif (
+                                type == MIDIFile.MetaEventName["MetaSequencerSpecific"]
+                            ):
                                 print("Sequencer Specific: " + readString(length))
                             else:
-                                print("Unrecognised meta event")
+                                print("Unrecognised meta event: " + str(type))
 
                         if status == 0xF0:
                             print("System Executive Begins" + readString(readValue()))
                         if status == 0xF7:
                             print("System Executive Ends" + readString(readValue()))
                     else:
-                        print("Unrecognised Status Byte: " + str(status & 0xF0))
+                        print(
+                            "Unrecognised Status Byte: "
+                            + str(status)
+                            + " "
+                            + str(previousState)
+                            + " "
+                            + str(temp)
+                        )
 
 
 demo = MIDIFile("meanwoman.mid")
