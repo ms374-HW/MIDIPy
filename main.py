@@ -1,22 +1,40 @@
-import numpy as np
 from enum import Enum
-import sys
 import os
 
+"""
+    This is a simple parser for a MIDI file that outputs a human readable text file of the instruction in the file
+    It is an adaptation of the parser created by Javidx9 (OneLoneCoder), hence the credit of the logic of this parser is completely for him
+    You can read the source code for their parser, written in C++ at https://github.com/OneLoneCoder/olcPixelGameEngine/blob/master/Videos/OneLoneCoder_PGE_MIDI.cpp
+    It will be helpful for further explanation, and to compare how both languages compare when parsing
+    If you want more information on the MIDI file format and OneLoneCoder's code, I recommend watching https://www.youtube.com/watch?v=040BKtnDdg0
+    It includes their detailed explanations for the source code and the basis of the logic
 
+    For a breakdown of the MIDI file components, i.e. the instructions, I recommend the reading http://personal.kent.edu/~sbirch/Music_Production/MP-II/MIDI/midi_file_format.htm#midi_event
+    It includes an extensive list of voice messages, mode messages as well as system instructions
+
+    This parser essentially identifies 3 main features in a MIDI file:
+        - The Tracks in a file
+        - The events in a track
+        - The notes used by a track
+    These are all identified as classes, and objects of these classes will be used to create the structure of the MIDI file as we parse
+"""
+
+# This recognises the events in a MIDI track
+# The type of events inclde: playing a note, stopping a note, or another system executive instruction
 class MIDIEvent:
+
+    # defining an enumeration on the type of MIDI events
     class Type(Enum):
         noteOFF = 0
         noteON = 1
         other = 2
 
+    # A MIDI event has the following features
+    # Type = The type of event (from the above enumeration)
+    # Key = The note being played
+    # velocity = the speed of the note in the track
+    # deltaTick = the time difference between this and the previous event
     def __init__(self, note, noteID=0, vel=0, delta=0):
-        # if delta == None:
-        #     self.type = note
-        #     self.key = 0
-        #     self.velocity = 0
-        #     self.deltaTick = 0
-        # else:
         self.type = note
         self.key = noteID
         self.velocity = vel
@@ -35,7 +53,14 @@ class MIDIEvent:
         )
 
 
+# recognises a note in a track in the MIDI file
+# the features of the note is identified by noting when a note On and note Off event arrive
 class MIDINote:
+    # a note in MIDI has the following features
+    # key = The note
+    # velocity = the speed of the note
+    # startTime = when the note begins
+    # duration = how long the note is played for
     def __init__(self, k, vel, start, dur):
         self.key = k
         self.velocity = vel
@@ -44,7 +69,7 @@ class MIDINote:
 
     def __repr__(self):
         return (
-            "\n Key: "
+            "\n\t Key: "
             + str(self.key)
             + " Velocity: "
             + str(self.velocity)
@@ -55,12 +80,17 @@ class MIDINote:
         )
 
 
+# recognises a track in the MIDI file
+# a track has a minimum and maximum note, which is initialised is 64 as a base value
 class MIDITrack:
-    # std::string sName;
-    # std::string sInstrument;
-    # std::vector<MidiEvent> vecEvents;
-    # std::vector<MidiNote> vecNotes;
+    maxNote = 64
+    minNote = 64
 
+    # The features in a note are as follows:
+    # name = a name given to a track, if any
+    # instrument = an instrument specified for a track, if any
+    # events = the list of events in the note
+    # notes = the list of notes and the duration
     def __init__(self):
         self.name = ""
         self.instrument = ""
@@ -68,7 +98,11 @@ class MIDITrack:
         self.notes = []
 
     def __repr__(self):
-        temp = ("\nTrack Name: " + str(self.name)) + ("\nTrack Instrument: " + str(self.instrument)) + ("\nTrack Events:")
+        temp = (
+            ("\nTrack Name: " + str(self.name))
+            + ("\nTrack Instrument: " + str(self.instrument))
+            + ("\nTrack Events:")
+        )
         for eve in self.events:
             temp = temp + repr(eve)
         temp = temp + ("\nTrack Notes:")
@@ -85,11 +119,12 @@ class MIDITrack:
     def setEvents(self, eve):
         self.events = eve
 
-    maxNote = 64
-    minNote = 64
 
-
+# the MIDI file class
 class MIDIFile:
+
+    # The following dictionaries are used to identify specific MIDI event and meta instructions
+    # for more information on these events, visit: http://personal.kent.edu/~sbirch/Music_Production/MP-II/MIDI/midi_file_format.htm#midi_event
     EventName = {
         "VoiceNoteOff": 0x80,
         "VoiceNoteOn": 0x90,
@@ -100,16 +135,6 @@ class MIDIFile:
         "VoicePitchBend": 0xE0,
         "SystemExclusive": 0xF0,
     }
-
-    class ModeMessages(Enum):
-        ALL_SOUND_OFF = 0x78
-        RESET_ALL_CONTROLLERS = 0x79
-        LOCAL_CONTROL = 0x7A
-        ALL_NOTES_OFF = 0x7B
-        OMNI_MODE_OFF = 0x7C
-        OMNI_MODE_ON = 0x7D
-        MONO_MODE_ON = 0x7E
-        SystemExclusive = 0x7F
 
     MetaEventName = {
         "MetaSequence": 0x00,
@@ -130,20 +155,18 @@ class MIDIFile:
         "MetaSequencerSpecific": 0x7F,
     }
 
+    # this includes the tracks and the tempo and BPM of the file
+    tracks = []
+    tempo = 0
+    bpm = 0
+
     def __init__(self, filename):
         MIDIFile.parseFile(filename)
 
-    tracks = []
-    m_nTempo = 0
-    m_nBPM = 0
-
+    # A function that parses the file
     def parseFile(filename):
-        n32 = 0
-        n16 = 0
-
+        # MIDI files are a sequence of bytes
         with open(filename, "rb") as f:
-            # f = f.read()
-            # print(f.read())
 
             # read a string of given size
             readString = lambda n: f.read(n)
@@ -181,11 +204,24 @@ class MIDIFile:
             trackChunks = int.from_bytes(f.read(2), "big")
             division = int.from_bytes(f.read(2), "big")
 
-            print(fileID)
-            print(headerLength)
-            print(nFormat)
-            print(trackChunks)
-            print(division)
+            temp = (
+                "File ID: "
+                + str(fileID)
+                + " header length: "
+                + str(headerLength)
+                + " format: "
+                + str(nFormat)
+                + " Number of Tracks: "
+                + str(trackChunks)
+                + " number of divisions: "
+                + str(divisions)
+            )
+
+            # print(fileID)
+            # print(headerLength)
+            # print(nFormat)
+            # print(trackChunks)
+            # print(division)
 
             for chunk in range(trackChunks):
                 endTrack = False
@@ -336,19 +372,19 @@ class MIDIFile:
                             elif type == MIDIFile.MetaEventName["MetaEndOfTrack"]:
                                 endTrack = True
                             elif type == MIDIFile.MetaEventName["MetaSetTempo"]:
-                                # if MIDIFile.m_nTempo == 0:
+                                # if MIDIFile.tempo == 0:
                                 n = int.from_bytes(f.read(1), "big")
-                                MIDIFile.m_nTempo |= n << 16
+                                MIDIFile.tempo |= n << 16
                                 n = int.from_bytes(f.read(1), "big")
-                                MIDIFile.m_nTempo |= n << 8
+                                MIDIFile.tempo |= n << 8
                                 n = int.from_bytes(f.read(1), "big")
-                                MIDIFile.m_nTempo |= n << 0
-                                MIDIFile.m_nBPM = 60000000 / MIDIFile.m_nTempo
+                                MIDIFile.tempo |= n << 0
+                                MIDIFile.bpm = 60000000 / MIDIFile.tempo
                                 print(
                                     "Tempo: "
-                                    + str(MIDIFile.m_nTempo)
+                                    + str(MIDIFile.tempo)
                                     + " ("
-                                    + str(MIDIFile.m_nBPM)
+                                    + str(MIDIFile.bpm)
                                     + "bpm)"
                                 )
                             elif type == MIDIFile.MetaEventName["MetaSMPTEOffset"]:
@@ -451,11 +487,10 @@ class MIDIFile:
                 track.notes = notes
 
     def __repr__(self):
-        temp = ''
+        temp = ""
         for track in self.tracks:
             temp = temp + repr(track)
         return temp
-        
 
 
 demo = MIDIFile("meanwoman.mid")
