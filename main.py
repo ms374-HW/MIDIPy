@@ -214,7 +214,7 @@ class MIDIFile:
                 + " Number of Tracks: "
                 + str(trackChunks)
                 + " number of divisions: "
-                + str(divisions)
+                + str(division)
             )
 
             # print(fileID)
@@ -223,52 +223,43 @@ class MIDIFile:
             # print(trackChunks)
             # print(division)
 
+            # parsing every track
             for chunk in range(trackChunks):
                 endTrack = False
                 wallTime = 0
                 previousState = 0
-                temp = 0
                 events = []
+                
+                # creating an track object for the file 
+                MIDIFile.tracks.append(MIDITrack())
 
+                # reading the ID and length of the track
                 trackID = f.read(4)
                 trackLength = int.from_bytes(f.read(4), "big")
 
-                print("-------- NEW TRACK --------")
-                print(trackID)
-                print("track length: " + str(trackLength))
-
-                MIDIFile.tracks.append(MIDITrack())
-
+                temp = temp + ("\n-------- NEW TRACK --------") + "\nTrack ID: " + str(trackID) + "\nTrack Length: " + str(trackLength)
+                
+                print("\n-------- NEW TRACK --------")
                 # loop till the end of the track
                 while not endTrack:
                     # the time difference between last note and current note is the delta
                     statusTimeDelta = readValue()
-                    # print("time difference: " + str(statusTimeDelta))
 
                     # the data can begin with an ID or instruction, to check which one it is, we check the status
                     num = f.read(1)
                     status = int.from_bytes(num, "big")
 
-                    # if status == 0:
-                    #     if int.from_bytes(f.read(1), "big") == 0:
-                    #         print("break at " + str(int.from_bytes(f.read(1), "big")))
-                    #         break
-                    #     else:
-                    #         f.seek(-1, os.SEEK_CUR)
-
+                    # if it begins with an instruction
                     if status < 0x80:
-                        print("running status! " + str(status & 0xF0))
+                        # set the previous status as the current status
                         status = previousState
-                        if previousState < 0x80:
-                            status = temp
                         # since we read the instruction byte, we need to bring it back on the stream so we can sync the values
                         f.seek(-1, os.SEEK_CUR)
-                        print("running status!" + str(temp))
 
+                    # parse to read the instruction and identify it
                     if (status & 0xF0) == MIDIFile.EventName["VoiceNoteOff"]:
-                        # print("in voice note on")
                         previousState = status
-                        # print(previousState)
+                        
                         channel = status & 0x0F
                         noteID = f.read(1)
                         noteVelocity = f.read(1)
@@ -283,11 +274,13 @@ class MIDIFile:
                         )
                     elif (status & 0xF0) == MIDIFile.EventName["VoiceNoteOn"]:
                         previousState = status
+                        
                         channel = status & 0x0F
                         noteID = f.read(1)
                         num = f.read(1)
                         noteVelocity = int.from_bytes(num, "big")
 
+                        # if the veloctiy is 0, that means the note isnt being played
                         if noteVelocity == 0:
                             events.append(
                                 MIDIEvent(
@@ -306,13 +299,17 @@ class MIDIFile:
                                     statusTimeDelta,
                                 )
                             )
+
                     elif (status & 0xF0) == MIDIFile.EventName["VoiceAftertouch"]:
                         previousState = status
+
                         key = status & 0x0F
                         keyPressure = f.read(1)
                         events.append(MIDIEvent(MIDIEvent.Type.other))
+
                     elif (status & 0xF0) == MIDIFile.EventName["VoiceControlChange"]:
                         previousState = status
+
                         channel = status & 0x0F
                         controlID = f.read(1)
                         controlValue = f.read(1)
@@ -338,7 +335,6 @@ class MIDIFile:
                         events.append(MIDIEvent(MIDIEvent.Type.other))
 
                     elif (status & 0xF0) == MIDIFile.EventName["SystemExclusive"]:
-                        temp = previousState
                         previousState = 0
 
                         if status == 0xFF:
@@ -446,15 +442,10 @@ class MIDIFile:
                             print("System Executive Ends" + readString(readValue()))
                     else:
                         print(
-                            "Unrecognised Status Byte: "
-                            + str(status)
-                            + " "
-                            + str(previousState)
-                            + " "
-                            + str(temp)
-                        )
+                            "Unrecognised Status Byte: " + str(status))
+
+                # add the list of events to the track
                 MIDIFile.tracks[chunk].setEvents(events)
-                # print(events)
 
             for track in MIDIFile.tracks:
                 wallTime = 0
