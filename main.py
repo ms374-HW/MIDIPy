@@ -10,25 +10,49 @@ class MIDIEvent:
         noteON = 1
         other = 2
 
-    # nKey = 0
-    # nVelocity = 0
-    # nDeltaTick = 0
+    def __init__(self, note, noteID=0, vel=0, delta=0):
+        # if delta == None:
+        #     self.type = note
+        #     self.key = 0
+        #     self.velocity = 0
+        #     self.deltaTick = 0
+        # else:
+        self.type = note
+        self.key = noteID
+        self.velocity = vel
+        self.deltaTick = delta
 
-    def __init__(self, note, noteID=None, vel=None, delta=None):
-        if delta == None:
-            self.type = note
-        else:
-            self.type = note
-            self.key = noteID
-            self.velocity = vel
-            self.deltaTick = delta
+    def __repr__(self):
+        return (
+            "\nEvent Type: "
+            + str(self.type)
+            + " Key: "
+            + str(self.key)
+            + " Velocity: "
+            + str(self.velocity)
+            + " delta tick: "
+            + str(self.deltaTick)
+        )
 
 
-def MIDINote():
-    nKey = 0
-    nVelocity = 0
-    nStartTime = 0
-    nDuration = 0
+class MIDINote:
+    def __init__(self, k, vel, start, dur):
+        self.key = k
+        self.velocity = vel
+        self.startTime = start
+        self.duration = dur
+
+    def __repr__(self):
+        return (
+            "\n Key: "
+            + str(self.key)
+            + " Velocity: "
+            + str(self.velocity)
+            + "start time: "
+            + str(self.startTime)
+            + " duration: "
+            + str(self.duration)
+        )
 
 
 class MIDITrack:
@@ -43,14 +67,26 @@ class MIDITrack:
         self.events = []
         self.notes = []
 
+    def __repr__(self):
+        temp = ("\nTrack Name: " + str(self.name)) + ("\nTrack Instrument: " + str(self.instrument)) + ("\nTrack Events:")
+        for eve in self.events:
+            temp = temp + repr(eve)
+        temp = temp + ("\nTrack Notes:")
+        for n in self.notes:
+            temp = temp + repr(n)
+        return temp
+
     def setName(self, name):
         self.name = name
 
     def setInstrument(self, inst):
         self.instrument = inst
 
-    nMaxNote = 64
-    nMinNote = 64
+    def setEvents(self, eve):
+        self.events = eve
+
+    maxNote = 64
+    minNote = 64
 
 
 class MIDIFile:
@@ -196,6 +232,7 @@ class MIDIFile:
                     if (status & 0xF0) == MIDIFile.EventName["VoiceNoteOff"]:
                         # print("in voice note on")
                         previousState = status
+                        # print(previousState)
                         channel = status & 0x0F
                         noteID = f.read(1)
                         noteVelocity = f.read(1)
@@ -299,24 +336,21 @@ class MIDIFile:
                             elif type == MIDIFile.MetaEventName["MetaEndOfTrack"]:
                                 endTrack = True
                             elif type == MIDIFile.MetaEventName["MetaSetTempo"]:
-                                if MIDIFile.m_nTempo == 0:
-                                    num = f.read(1)
-                                    n = int.from_bytes(num, "big")
-                                    MIDIFile.m_nTempo |= n << 16
-                                    num = f.read(1)
-                                    n = int.from_bytes(num, "big")
-                                    MIDIFile.m_nTempo |= n << 8
-                                    num = f.read(1)
-                                    n = int.from_bytes(num, "big")
-                                    MIDIFile.m_nTempo |= n << 0
-                                    MIDIFile.m_nBPM = 60000000 / MIDIFile.m_nTempo
-                                    print(
-                                        "Tempo: "
-                                        + str(MIDIFile.m_nTempo)
-                                        + " ("
-                                        + str(MIDIFile.m_nBPM)
-                                        + "bpm)"
-                                    )
+                                # if MIDIFile.m_nTempo == 0:
+                                n = int.from_bytes(f.read(1), "big")
+                                MIDIFile.m_nTempo |= n << 16
+                                n = int.from_bytes(f.read(1), "big")
+                                MIDIFile.m_nTempo |= n << 8
+                                n = int.from_bytes(f.read(1), "big")
+                                MIDIFile.m_nTempo |= n << 0
+                                MIDIFile.m_nBPM = 60000000 / MIDIFile.m_nTempo
+                                print(
+                                    "Tempo: "
+                                    + str(MIDIFile.m_nTempo)
+                                    + " ("
+                                    + str(MIDIFile.m_nBPM)
+                                    + "bpm)"
+                                )
                             elif type == MIDIFile.MetaEventName["MetaSMPTEOffset"]:
                                 print(
                                     "SMPTE: H:"
@@ -361,7 +395,8 @@ class MIDIFile:
                                 )
                             elif type == MIDIFile.MetaEventName["MetaPort"]:
                                 # print("Meta Port")
-                                print("Meta Port: " + str(f.read(1)))
+                                print("Meta Port")
+                                f.read(1)
                             elif (
                                 type == MIDIFile.MetaEventName["MetaSequencerSpecific"]
                             ):
@@ -382,6 +417,49 @@ class MIDIFile:
                             + " "
                             + str(temp)
                         )
+                MIDIFile.tracks[chunk].setEvents(events)
+                # print(events)
+
+            for track in MIDIFile.tracks:
+                wallTime = 0
+                processedNotes = []
+                notes = []
+                for eve in track.events:
+                    wallTime = wallTime + eve.deltaTick
+                    if eve.type == MIDIEvent.Type.noteON:
+                        processedNotes.append(
+                            MIDINote(eve.key, eve.velocity, wallTime, 0)
+                        )
+                    elif eve.type == MIDIEvent.Type.noteOFF:
+
+                        def findNote(noteList):
+                            for n in noteList:
+                                if n.key == eve.key:
+                                    return n
+
+                        note = findNote(processedNotes)
+                        if note:
+                            processedNotes.remove(note)
+                            note.duration = wallTime - note.startTime
+                            notes.append(note)
+                            track.minNote = min(
+                                track.minNote, int.from_bytes(note.key, "big")
+                            )
+                            track.maxNote = min(
+                                track.maxNote, int.from_bytes(note.key, "big")
+                            )
+                track.notes = notes
+
+    def __repr__(self):
+        temp = ''
+        for track in self.tracks:
+            temp = temp + repr(track)
+        return temp
+        
 
 
 demo = MIDIFile("meanwoman.mid")
+temp = repr(demo)
+f = open("openedMIDI.txt", "w")
+f.write(temp)
+f.close()
