@@ -170,7 +170,7 @@ class MIDIFile:
         with open(filename, "rb") as f:
 
             # read a string of given size
-            readString = lambda n: f.read(n)
+            readString = lambda n: str(f.read(n))
 
             # reading an integer (value)
             # MIDI values are between the ranges 0-127
@@ -247,7 +247,7 @@ class MIDIFile:
                     + str(trackID)
                     + "\nTrack Length: "
                     + str(trackLength)
-                    + '\n'
+                    + "\n"
                 )
 
                 print("\n-------- NEW TRACK --------")
@@ -381,20 +381,23 @@ class MIDIFile:
                             elif type == MIDIFile.MetaEventName["MetaEndOfTrack"]:
                                 endTrack = True
                             elif type == MIDIFile.MetaEventName["MetaSetTempo"]:
+                                n1 = 0
                                 n = int.from_bytes(f.read(1), "big")
-                                MIDIFile.tempo |= n << 16
+                                n1 |= n << 16
                                 n = int.from_bytes(f.read(1), "big")
-                                MIDIFile.tempo |= n << 8
+                                n1 |= n << 8
                                 n = int.from_bytes(f.read(1), "big")
-                                MIDIFile.tempo |= n << 0
-                                MIDIFile.bpm = 60000000 / MIDIFile.tempo
-                                print(
-                                    "Tempo: "
-                                    + str(MIDIFile.tempo)
-                                    + " ("
-                                    + str(MIDIFile.bpm)
-                                    + "bpm)"
-                                )
+                                n1 |= n << 0
+                                MIDIFile.bpm = 60000000 / n1
+                                if n1 != MIDIFile.tempo:
+                                    MIDIFile.tempo = n1
+                                    print(
+                                        "Tempo: "
+                                        + str(MIDIFile.tempo)
+                                        + " ("
+                                        + str(MIDIFile.bpm)
+                                        + "bpm)"
+                                    )
                             elif type == MIDIFile.MetaEventName["MetaSMPTEOffset"]:
                                 print(
                                     "SMPTE: H:"
@@ -506,7 +509,7 @@ class MIDIFile:
         return MIDIFile.temp
 
 
-demo = MIDIFile("meanwoman.mid")
+demo = MIDIFile("bach_846.mid")
 script = repr(demo)
 f = open("openedMIDI.txt", "w")
 f.write(script)
