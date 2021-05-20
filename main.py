@@ -159,6 +159,7 @@ class MIDIFile:
     tracks = []
     tempo = 0
     bpm = 0
+    temp = ""
 
     def __init__(self, filename):
         MIDIFile.parseFile(filename)
@@ -198,14 +199,16 @@ class MIDIFile:
                         nValue = (nValue << 7) | (nByte & 0x7F)
                 return nValue
 
+            # read File information
             fileID = f.read(4)
             headerLength = int.from_bytes(f.read(4), "big")
             nFormat = int.from_bytes(f.read(2), "big")
             trackChunks = int.from_bytes(f.read(2), "big")
             division = int.from_bytes(f.read(2), "big")
 
-            temp = (
-                "File ID: "
+            # add to the temp
+            MIDIFile.temp = (
+                "\nFile ID: "
                 + str(fileID)
                 + " header length: "
                 + str(headerLength)
@@ -229,16 +232,24 @@ class MIDIFile:
                 wallTime = 0
                 previousState = 0
                 events = []
-                
-                # creating an track object for the file 
+
+                # creating an track object for the file
                 MIDIFile.tracks.append(MIDITrack())
 
                 # reading the ID and length of the track
                 trackID = f.read(4)
                 trackLength = int.from_bytes(f.read(4), "big")
 
-                temp = temp + ("\n-------- NEW TRACK --------") + "\nTrack ID: " + str(trackID) + "\nTrack Length: " + str(trackLength)
-                
+                MIDIFile.temp = (
+                    MIDIFile.temp
+                    + ("\n-------- NEW TRACK --------")
+                    + "\nTrack ID: "
+                    + str(trackID)
+                    + "\nTrack Length: "
+                    + str(trackLength)
+                    + '\n'
+                )
+
                 print("\n-------- NEW TRACK --------")
                 # loop till the end of the track
                 while not endTrack:
@@ -259,7 +270,7 @@ class MIDIFile:
                     # parse to read the instruction and identify it
                     if (status & 0xF0) == MIDIFile.EventName["VoiceNoteOff"]:
                         previousState = status
-                        
+
                         channel = status & 0x0F
                         noteID = f.read(1)
                         noteVelocity = f.read(1)
@@ -274,7 +285,7 @@ class MIDIFile:
                         )
                     elif (status & 0xF0) == MIDIFile.EventName["VoiceNoteOn"]:
                         previousState = status
-                        
+
                         channel = status & 0x0F
                         noteID = f.read(1)
                         num = f.read(1)
@@ -323,12 +334,14 @@ class MIDIFile:
 
                     elif (status & 0xF0) == MIDIFile.EventName["VoiceChannelPressure"]:
                         previousState = status
+
                         channel = status & 0x0F
                         channelPressure = f.read(1)
                         events.append(MIDIEvent(MIDIEvent.Type.other))
 
                     elif (status & 0xF0) == MIDIFile.EventName["VoicePitchBend"]:
                         previousState = status
+
                         channel = status & 0x0F
                         LS7B = f.read(1)
                         MS7B = f.read(1)
@@ -368,7 +381,6 @@ class MIDIFile:
                             elif type == MIDIFile.MetaEventName["MetaEndOfTrack"]:
                                 endTrack = True
                             elif type == MIDIFile.MetaEventName["MetaSetTempo"]:
-                                # if MIDIFile.tempo == 0:
                                 n = int.from_bytes(f.read(1), "big")
                                 MIDIFile.tempo |= n << 16
                                 n = int.from_bytes(f.read(1), "big")
@@ -426,7 +438,6 @@ class MIDIFile:
                                     + str(int.from_bytes(f.read(1), "big"))
                                 )
                             elif type == MIDIFile.MetaEventName["MetaPort"]:
-                                # print("Meta Port")
                                 print("Meta Port")
                                 f.read(1)
                             elif (
@@ -438,25 +449,30 @@ class MIDIFile:
 
                         if status == 0xF0:
                             print("System Executive Begins" + readString(readValue()))
+
                         if status == 0xF7:
                             print("System Executive Ends" + readString(readValue()))
                     else:
-                        print(
-                            "Unrecognised Status Byte: " + str(status))
+                        print("Unrecognised Status Byte: " + str(status))
 
                 # add the list of events to the track
                 MIDIFile.tracks[chunk].setEvents(events)
 
+            # creating list of notes used in every track
             for track in MIDIFile.tracks:
                 wallTime = 0
-                processedNotes = []
-                notes = []
+                processedNotes = []  # notes that are being processed
+                notes = []  # notes that have been processed
+
                 for eve in track.events:
+                    # getting the total time since
                     wallTime = wallTime + eve.deltaTick
+
                     if eve.type == MIDIEvent.Type.noteON:
                         processedNotes.append(
                             MIDINote(eve.key, eve.velocity, wallTime, 0)
                         )
+                    # if a note has ended
                     elif eve.type == MIDIEvent.Type.noteOFF:
 
                         def findNote(noteList):
@@ -464,28 +480,34 @@ class MIDIFile:
                                 if n.key == eve.key:
                                     return n
 
+                        # finding the note when it began
                         note = findNote(processedNotes)
+
                         if note:
                             processedNotes.remove(note)
+                            # getting duration
                             note.duration = wallTime - note.startTime
                             notes.append(note)
+
+                            # checking minimum and maximum of a note in a track
                             track.minNote = min(
                                 track.minNote, int.from_bytes(note.key, "big")
                             )
                             track.maxNote = min(
                                 track.maxNote, int.from_bytes(note.key, "big")
                             )
+                # Setting the track's notes
                 track.notes = notes
 
     def __repr__(self):
-        temp = ""
         for track in self.tracks:
-            temp = temp + repr(track)
-        return temp
+            if track.name != "":
+                MIDIFile.temp = MIDIFile.temp + repr(track)
+        return MIDIFile.temp
 
 
 demo = MIDIFile("meanwoman.mid")
-temp = repr(demo)
+script = repr(demo)
 f = open("openedMIDI.txt", "w")
-f.write(temp)
+f.write(script)
 f.close()
