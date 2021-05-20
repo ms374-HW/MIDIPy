@@ -22,7 +22,7 @@ These are all identified as classes, and objects of these classes will be used t
 
 ## How to use this file
 ### Example Run
-To run the file on the example MIDI File [[1]], simply fork and download the repository and click run on your IDE or run the command:
+To run the file on the example MIDI File [1], simply fork and download the repository and click run on your IDE or run the command:
 ```
 python3 main.py
 ```
