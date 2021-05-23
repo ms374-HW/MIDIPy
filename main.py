@@ -514,3 +514,15 @@ script = repr(demo)
 f = open("openedMIDI.txt", "w")
 f.write(script)
 f.close()
+
+import matplotlib.pyplot as plt
+
+plotTracks = []
+for track in demo.tracks:
+    events = [eve for eve in track.events if eve.type == MIDIEvent.Type.noteON]
+    pitch = [note.key for note in events]
+    tick = [note.deltaTick for note in events]
+    plotTracks += [tick, pitch]
+
+plt.plot(*plotTracks)
+plt.show()
