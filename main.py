@@ -480,12 +480,16 @@ f.close()
 
 import matplotlib.pyplot as plt
 
-plotTracks = []
+plt.style.use('seaborn')
+
 for track in demo.tracks:
     pitch = [ord(note.key) for note in track.notes]
     tick = [note.startTime for note in track.notes]
-    plotTracks += [tick, pitch]
+    if pitch:
+        plt.fill_between(tick, pitch, alpha=0.4)
+        plt.plot(tick, pitch, label=track.name, alpha=0.6)
 
-plt.plot(*plotTracks)
-plt.show()
+plt.xlabel("Time step")
+plt.ylabel("Pitch")
+plt.legend(loc='upper right')
 plt.savefig('music.png')
