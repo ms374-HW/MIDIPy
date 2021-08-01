@@ -473,6 +473,7 @@ class MIDIFile:
 
 
 demo = MIDIFile("bach_846.mid")
+print(demo.tracks[1].notes)
 script = repr(demo)
 f = open("openedMIDI.txt", "w")
 f.write(script)
