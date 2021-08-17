@@ -49,8 +49,8 @@ demo = MIDIFile("your_file_path.mid")
 You can view the graph of the notes in the track, with every track represented as its own color in the generated file 'music.png', the graph for the sample MIDI file has been given
 
 ## Future
-
-Since this is a simple parser, more work can be done in the output to make it more understandable and intuitive. An interesting prospect can be visualising the events in the track.
+1. Parsing and returning sequences that can be fed for machine learning algorithms
+2. Visualising events in the tracks
 
 </br> </br>
 [1]: http://www.piano-midi.de/bach.htm
